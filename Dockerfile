@@ -15,11 +15,10 @@ RUN npm run build
 FROM node:22.14.0-bookworm-slim AS runner
 
 ENV NODE_ENV=production
-ENV CLOUDFLARE_INCLUDE_PROCESS_ENV=true
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
 WORKDIR /app
 
-COPY --from=builder --chown=node:node /app/package.json /app/package-lock.json ./
-COPY --from=builder --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/dist ./dist
 
 USER node
@@ -28,4 +27,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 
-CMD ["npm", "run", "start", "--", "--ip", "0.0.0.0", "--port", "3000"]
+CMD ["node", "dist/standalone/server.js"]
