@@ -32,6 +32,22 @@ export async function GET(_request:NextRequest,context:{params:Promise<{id:strin
     try{payload=await response.json()}catch{return failure(502,'INVALID_RESPONSE','SophIA devolvió una respuesta que no es JSON.',requestId)}
     const call=findRecord(payload,id);
     if(!call)return failure(404,'NOT_FOUND','No se encontró una llamada con ese ID.',requestId);
+    const assistantId=call.assistant_id;
+    if(assistantId){
+      try{
+        const assistantUrl=new URL(`${baseUrl}/assistants`);assistantUrl.searchParams.set('id',String(assistantId));
+        const assistantResponse=await fetch(assistantUrl,{headers:{'x-api-key':apiKey,accept:'application/json'},cache:'no-store',signal:AbortSignal.timeout(8_000)});
+        if(assistantResponse.ok){const assistantPayload:unknown=await assistantResponse.json();const assistant=findRecord(assistantPayload,String(assistantId));if(assistant)call.assistant_name=assistant.name||assistant.assistant_name||assistant.title}
+      }catch(error){console.warn(`[trace:${requestId}] Assistant name lookup failed`,error)}
+    }
+    const crm:Record<string,unknown>={};
+    const lookups:[string,string,unknown][]=[['lead','crm_leads',Array.isArray(call.crm_lead_ids)?call.crm_lead_ids[0]:undefined],['contact','crm_contacts',Array.isArray(call.crm_contact_ids)?call.crm_contact_ids[0]:undefined],['account','crm_accounts',Array.isArray(call.crm_account_ids)?call.crm_account_ids[0]:undefined]];
+    await Promise.all(lookups.map(async([label,table,entityId])=>{
+      if(entityId===undefined)return;
+      try{const entityUrl=new URL(`${baseUrl}/${table}`);entityUrl.searchParams.set('id',String(entityId));const entityResponse=await fetch(entityUrl,{headers:{'x-api-key':apiKey,accept:'application/json'},cache:'no-store',signal:AbortSignal.timeout(6_000)});if(entityResponse.ok){const entityPayload:unknown=await entityResponse.json();crm[label]=findRecord(entityPayload,String(entityId))}}
+      catch(error){console.warn(`[trace:${requestId}] ${table} lookup failed`,error)}
+    }));
+    call.crm=crm;
     return NextResponse.json({call,meta:{requestId,source:'SophIA callLogs v2',fetchedAt:new Date().toISOString()}});
   }catch(error){
     const timedOut=error instanceof Error&&(error.name==='TimeoutError'||error.name==='AbortError');
