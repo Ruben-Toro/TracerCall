@@ -15,6 +15,7 @@ RUN npm run build
 FROM node:22.14.0-bookworm-slim AS runner
 
 ENV NODE_ENV=production
+ENV CLOUDFLARE_INCLUDE_PROCESS_ENV=true
 WORKDIR /app
 
 COPY --from=builder --chown=node:node /app/package.json /app/package-lock.json ./
