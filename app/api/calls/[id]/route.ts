@@ -3,16 +3,19 @@ import { NextRequest, NextResponse } from 'next/server';
 const DEFAULT_API_URL = 'https://dashboard.soph-ia.ai/api/v2';
 const CALL_ID_PATTERN = /^[a-zA-Z0-9_-]{8,100}$/;
 
-function firstRecord(payload: unknown): Record<string, unknown> | null {
-  if (Array.isArray(payload)) return (payload[0] as Record<string, unknown>) ?? null;
+function findRecord(payload: unknown, requestedId: string): Record<string, unknown> | null {
+  if (Array.isArray(payload)) {
+    return (payload.find((item) => item && typeof item === 'object' && String((item as Record<string, unknown>).id) === requestedId) as Record<string, unknown>) ?? null;
+  }
   if (!payload || typeof payload !== 'object') return null;
   const object = payload as Record<string, unknown>;
+  if (String(object.id) === requestedId) return object;
   for (const key of ['data', 'rows', 'results', 'items']) {
     const value = object[key];
-    if (Array.isArray(value)) return (value[0] as Record<string, unknown>) ?? null;
-    if (value && typeof value === 'object') return value as Record<string, unknown>;
+    const match = findRecord(value, requestedId);
+    if (match) return match;
   }
-  return object;
+  return null;
 }
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -43,7 +46,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       return NextResponse.json({ error: `SophIA respondió con estado ${response.status}.` }, { status: 502 });
     }
     const payload: unknown = await response.json();
-    const call = firstRecord(payload);
+    const call = findRecord(payload, id);
     if (!call || Object.keys(call).length === 0) {
       return NextResponse.json({ error: 'No se encontró una llamada con ese ID.' }, { status: 404 });
     }

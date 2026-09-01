@@ -42,7 +42,7 @@ export default function Home() {
   const [callId,setCallId]=useState('');
   const [searchedId,setSearchedId]=useState('Esperando consulta');
   const [loading,setLoading]=useState(false);
-  const [traceEvents,setTraceEvents]=useState<TraceEvent[]>(sampleEvents);
+  const [traceEvents,setTraceEvents]=useState<TraceEvent[]>([]);
   const [call,setCall]=useState<CallRecord>({});
   const [error,setError]=useState('');
   const [query,setQuery]=useState('');
@@ -51,7 +51,7 @@ export default function Home() {
   const filtered=useMemo(()=>traceEvents.filter(e=>`${e.title} ${e.detail} ${e.tag}`.toLowerCase().includes(query.toLowerCase())&&(!onlyWarnings||e.kind==='warn')),[traceEvents,query,onlyWarnings]);
   function notify(message:string){setToast(message);window.setTimeout(()=>setToast(''),1800)}
   async function scan(e:FormEvent){
-    e.preventDefault();if(!callId.trim())return;setLoading(true);setError('');
+    e.preventDefault();if(!callId.trim())return;setLoading(true);setError('');setCall({});setTraceEvents([]);setSearchedId(callId.trim());
     try{const response=await fetch(`/api/calls/${encodeURIComponent(callId.trim())}`,{cache:'no-store'});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'No fue posible consultar la llamada.');setCall(payload.call);setTraceEvents(normalizeEvents(payload.call));setSearchedId(callId.trim())}
     catch(err){setError(err instanceof Error?err.message:'No fue posible consultar la llamada.')}
     finally{setLoading(false)}
@@ -80,9 +80,9 @@ export default function Home() {
           <div className="timeline">{filtered.map((item,index)=><article className={`event ${item.kind}`} key={item.time}><time>{item.time}</time><div className="event-line"><span className="event-dot">{item.kind==='warn'?'!':<Check size={11}/>}</span>{index<filtered.length-1&&<span className="connector"/>}</div><div className="event-body"><div className="event-title"><strong>{item.title}</strong><span>{item.tag}</span><em>{item.duration}</em></div><p>{item.detail}</p></div></article>)}{filtered.length===0&&<div className="empty">No hay eventos que coincidan con este filtro.</div>}</div>
         </section>
         <aside className="details-column">
-          <section className="detail-card"><div className="detail-title"><Phone size={17}/><h3>Detalles de llamada</h3></div><dl><div><dt>Inicio</dt><dd>12 ago 2026, 14:32</dd></div><div><dt>Fin</dt><dd>12 ago 2026, 14:35</dd></div><div><dt>Dirección</dt><dd><span className="inbound">↘ Entrante</span></dd></div><div><dt>Canal</dt><dd>Voz · Twilio</dd></div><div><dt>Campaña</dt><dd>Renovaciones Q3</dd></div></dl></section>
-          <section className="detail-card contact-card"><div className="detail-title"><UserRound size={17}/><h3>Contacto</h3></div><div className="contact"><div className="contact-avatar">AM</div><div><strong>Andrés Martínez</strong><span>+57 300 *** 4821</span></div></div><button>Ver perfil del contacto <ArrowRight size={14}/></button></section>
-          <section className="insight-card"><div className="insight-label"><Sparkles size={15}/> RESUMEN IA</div><p>El contacto mostró interés en renovar, pero solicitó recibir las condiciones por correo antes de decidir.</p><div><span>Resultado</span><strong>Seguimiento requerido</strong></div></section>
+          <section className="detail-card"><div className="detail-title"><Phone size={17}/><h3>Detalles de llamada</h3></div><dl><div><dt>Inicio</dt><dd>{text(pick(call,'created_at','started_at','start_time'))||'—'}</dd></div><div><dt>Fin</dt><dd>{text(pick(call,'ended_at','end_time','updated_at'))||'—'}</dd></div><div><dt>Dirección</dt><dd><span className="inbound">{text(pick(call,'direction','call_direction'))||'—'}</span></dd></div><div><dt>Canal</dt><dd>{text(pick(call,'type','channel','provider'))||'—'}</dd></div><div><dt>Costo</dt><dd>{text(pick(call,'cost','total_cost'))||'—'}</dd></div></dl></section>
+          <section className="detail-card contact-card"><div className="detail-title"><UserRound size={17}/><h3>Contacto</h3></div><div className="contact"><div className="contact-avatar">ID</div><div><strong>{text(pick(call,'contact_name','lead_name','customer_name','name'))||'Sin nombre'}</strong><span>{text(pick(call,'from','phone','phone_number','caller_id'))||'—'}</span></div></div></section>
+          <section className="insight-card"><div className="insight-label"><Sparkles size={15}/> RESULTADO SOPHIA</div><p>{text(pick(call,'summary','call_summary','structuredDataResult','structured_data_result'))||'La llamada no contiene un resumen estructurado.'}</p><div><span>Motivo de cierre</span><strong>{text(pick(call,'endedReason','ended_reason','end_reason'))||'—'}</strong></div></section>
         </aside>
       </div>
     </section>}
