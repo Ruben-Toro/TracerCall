@@ -22,7 +22,8 @@ function valueAt(payload: unknown, ...paths: string[][]) {
 }
 
 function agentKey(agent: Record<string, unknown>) {
-  return String(agent.id ?? agent.assistant_id ?? agent.uuid ?? '');
+  const value = agent.id ?? agent.assistant_id ?? agent.uuid;
+  return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
 }
 
 export async function GET() {

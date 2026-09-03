@@ -3,6 +3,7 @@ const DEFAULT_API_URL = 'https://dashboard.soph-ia.ai/api/v2';
 type ConnectionState = {
   apiKey?: string;
   validatedAt?: string;
+  backups?: Map<string, { savedAt: string; agent: Record<string, unknown> }>;
 };
 
 const globalState = globalThis as typeof globalThis & { __sophiaConnection?: ConnectionState };
@@ -31,6 +32,12 @@ export function saveSophiaApiKey(apiKey: string) {
 export function clearSophiaApiKey() {
   delete state().apiKey;
   delete state().validatedAt;
+}
+
+export function saveAgentBackup(id: string, agent: Record<string, unknown>) {
+  const connection = state();
+  connection.backups ??= new Map();
+  connection.backups.set(id, { savedAt: new Date().toISOString(), agent });
 }
 
 export function keyHint(apiKey?: string) {
