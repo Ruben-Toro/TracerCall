@@ -1,7 +1,7 @@
 'use client';
 
-import { Activity, AlertTriangle, ArrowRight, BookOpen, Check, ChevronDown, Clock3, Copy, DollarSign, Download, Globe2, Headphones, KeyRound, Phone, Search, ShieldCheck, Sparkles, UserRound, X } from 'lucide-react';
-import { FormEvent, useMemo, useState } from 'react';
+import { Activity, AlertTriangle, ArrowRight, BookOpen, Check, ChevronDown, Clock3, Copy, DollarSign, Download, Globe2, Headphones, KeyRound, Phone, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, UserRound, X } from 'lucide-react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 
 type TraceEvent = { time: string; title: string; detail: string; kind: 'ok' | 'info' | 'warn'; tag: string; duration?: string };
@@ -50,8 +50,30 @@ function normalizeEvents(call:CallRecord):TraceEvent[]{
 }
 function Logo(){return <div className="brand-mark" aria-hidden="true"><span/><span/><span/></div>}
 
+type Agent = Record<string, unknown>;
+type ConnectionStatus = { configured:boolean; connected:boolean; keyHint:string|null; source:string; validatedAt:string|null };
+
+function AgentsPanel({navigate}:{navigate:(view:'explorer'|'docs'|'agents')=>void}){
+  const [status,setStatus]=useState<ConnectionStatus|null>(null);const [apiKey,setApiKey]=useState('');const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [agents,setAgents]=useState<Agent[]>([]);const [filter,setFilter]=useState('');
+  async function loadStatus(){const response=await fetch('/api/settings/sophia-connection',{cache:'no-store'});setStatus(await response.json())}
+  async function loadAgents(){setBusy(true);setError('');try{const response=await fetch('/api/agents',{cache:'no-store'});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'No fue posible cargar los agentes.');setAgents(payload.agents||[])}catch(err){setError(err instanceof Error?err.message:'No fue posible cargar los agentes.')}finally{setBusy(false)}}
+  useEffect(()=>{loadStatus()},[]);
+  async function connect(e:FormEvent){e.preventDefault();setBusy(true);setError('');try{const response=await fetch('/api/settings/sophia-connection',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({apiKey})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'No fue posible validar la conexión.');setStatus(payload);setApiKey('');await loadAgents()}catch(err){setError(err instanceof Error?err.message:'No fue posible validar la conexión.')}finally{setBusy(false)}}
+  async function clearKey(){setBusy(true);setError('');try{const response=await fetch('/api/settings/sophia-connection',{method:'DELETE'});setStatus(await response.json());setAgents([])}finally{setBusy(false)}}
+  const visible=agents.filter(agent=>`${text(pick(agent,'name','assistant_name','title'))} ${text(pick(agent,'id','assistant_id'))}`.toLowerCase().includes(filter.toLowerCase()));
+  return <main><header className="topbar"><button className="brand brand-button" onClick={()=>navigate('explorer')}><Logo/><span>traza<b>.</b></span></button><nav><button onClick={()=>navigate('explorer')}>Explorador</button><button className="active" onClick={()=>navigate('agents')}>Agentes</button><button onClick={()=>navigate('docs')}>Documentación</button></nav><div className="header-actions"><div className="avatar">RT</div><button className="user-menu">Rubén Toro <ChevronDown size={15}/></button></div></header>
+    <section className="agents-shell"><div className="agents-heading"><div className="eyebrow"><span/> GESTIÓN DE AGENTES</div><h1>Configura agentes existentes.</h1><p>Conecta SophIA, selecciona un agente y prepara cambios controlados sobre su configuración actual.</p></div>
+      <section className="connection-card"><div className="connection-copy"><div className={`connection-state ${status?.configured?'ready':''}`}><span/>{status?.configured?'SophIA configurada':'Sin conexión'}</div><h2>Conexión temporal</h2><p>La API key se conserva solo en la memoria del servidor y se pierde al reiniciar el contenedor.</p>{status?.configured&&<div className="key-hint"><KeyRound size={15}/><strong>{status.keyHint}</strong><span>{status.source==='memory'?'Cargada desde esta página':'Variable de entorno'}</span></div>}</div>
+        <form className="connection-form" onSubmit={connect}><label htmlFor="sophia-key">API KEY DE SOPHIA</label><div className="key-row"><input id="sophia-key" type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="Pega aquí la credencial" autoComplete="off"/><button disabled={busy||apiKey.trim().length<12}>{busy?'Validando…':'Guardar y probar'}</button></div><small>No se guarda en el navegador, archivos ni logs.</small>{status?.source==='memory'&&<button type="button" className="remove-key" onClick={clearKey}><Trash2 size={14}/> Eliminar clave temporal</button>}</form>
+      </section>{error&&<div className="api-error agents-error"><AlertTriangle size={14}/>{error}</div>}
+      <section className="agents-card"><div className="agents-toolbar"><div><h2>Agentes existentes</h2><p>{agents.length} agentes disponibles</p></div><div className="agents-actions"><div className="mini-search agent-search"><Search size={15}/><input value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Buscar agente…"/></div><button onClick={loadAgents} disabled={busy||!status?.configured}><RefreshCw size={15}/>{busy?'Cargando…':'Actualizar'}</button></div></div>
+        {!status?.configured?<div className="agents-empty"><KeyRound size={25}/><h3>Conecta SophIA para comenzar</h3><p>Después podrás consultar y seleccionar los agentes existentes.</p></div>:visible.length===0?<div className="agents-empty"><Headphones size={25}/><h3>{agents.length?'No hay coincidencias':'Lista pendiente de cargar'}</h3><p>{agents.length?'Prueba con otro nombre o ID.':'Pulsa Actualizar para consultar SophIA.'}</p></div>:<div className="agents-list">{visible.map((agent,index)=><article key={text(pick(agent,'id','assistant_id'))||String(index)}><div className="agent-avatar"><Headphones size={17}/></div><div><strong>{text(pick(agent,'name','assistant_name','title'))||'Agente sin nombre'}</strong><span>{text(pick(agent,'id','assistant_id'))||'Sin ID'}</span></div><em>{text(pick(agent,'language','voice','status'))||'Configurado'}</em><button disabled>Editar <ArrowRight size={14}/></button></article>)}</div>}
+      </section>
+    </section></main>
+}
+
 export default function Home() {
-  const [view,setView]=useState<'explorer'|'docs'>('explorer');
+  const [view,setView]=useState<'explorer'|'docs'|'agents'>('explorer');
   const [callId,setCallId]=useState('');
   const [searchedId,setSearchedId]=useState('Esperando consulta');
   const [loading,setLoading]=useState(false);
@@ -79,14 +101,15 @@ export default function Home() {
     catch(err){setError(err instanceof Error?err.message:'No fue posible consultar la llamada.')}
     finally{setLoading(false)}
   }
+  if(view==='agents')return <AgentsPanel navigate={setView}/>;
   if(view==='docs')return <main>
-    <header className="topbar"><button className="brand brand-button" onClick={()=>setView('explorer')}><Logo/><span>traza<b>.</b></span></button><nav><button onClick={()=>setView('explorer')}>Explorador</button><button className="active" onClick={()=>setView('docs')}>Documentación</button></nav><div className="header-actions"><div className="avatar">RT</div><button className="user-menu">Rubén Toro <ChevronDown size={15}/></button></div></header>
+    <header className="topbar"><button className="brand brand-button" onClick={()=>setView('explorer')}><Logo/><span>traza<b>.</b></span></button><nav><button onClick={()=>setView('explorer')}>Explorador</button><button onClick={()=>setView('agents')}>Agentes</button><button className="active" onClick={()=>setView('docs')}>Documentación</button></nav><div className="header-actions"><div className="avatar">RT</div><button className="user-menu">Rubén Toro <ChevronDown size={15}/></button></div></header>
     <section className="docs-shell">
       <div className="docs-heading"><div className="eyebrow"><span/> DOCUMENTACIÓN</div><h1>Conexión con SophIA</h1><p>Referencia rápida para configurar y consultar llamadas sin exponer credenciales en el navegador.</p></div>
       <div className="docs-grid">
-        <article className="docs-card"><div className="docs-icon"><KeyRound size={19}/></div><h2>1. Configura la API key</h2><p>Guarda la clave únicamente en el archivo <code>.env</code> del servidor.</p><pre>{`SOPHIA_API_URL=https://dashboard.soph-ia.ai/api/v2\nSOPHIA_API_KEY=tu_secreto_completo`}</pre></article>
+        <article className="docs-card"><div className="docs-icon"><KeyRound size={19}/></div><h2>1. Configura la API key</h2><p>Abre <strong>Agentes</strong>, pega la clave y pulsa <strong>Guardar y probar</strong>. La credencial permanece únicamente en memoria.</p><pre>{`Agentes → Conexión temporal\nAPI key → Guardar y probar`}</pre></article>
         <article className="docs-card"><div className="docs-icon"><BookOpen size={19}/></div><h2>2. Consulta un call ID</h2><p>La aplicación envía el ID al endpoint interno. El servidor agrega la cabecera privada.</p><pre>{`GET /api/v2/callLogs?id=CALL_ID\nx-api-key: ••••••••••••`}</pre></article>
-        <article className="docs-card"><div className="docs-icon"><ShieldCheck size={19}/></div><h2>3. Manejo seguro</h2><p>La clave nunca viaja al navegador. Rota la credencial si se comparte y limita el acceso del servidor.</p><ul><li>No guardar la clave en Git.</li><li>No usar variables <code>NEXT_PUBLIC_*</code>.</li><li>Consultar siempre por ID exacto.</li></ul></article>
+        <article className="docs-card"><div className="docs-icon"><ShieldCheck size={19}/></div><h2>3. Manejo seguro</h2><p>La clave se envía una vez al servidor y nunca se devuelve completa. Rota la credencial si se comparte y limita el acceso del servidor.</p><ul><li>No se guarda en Git ni archivos.</li><li>No se conserva en <code>localStorage</code>.</li><li>Se pierde al reiniciar el contenedor.</li></ul></article>
       </div>
       <section className="docs-flow"><span>Navegador</span><ArrowRight size={17}/><span>Servidor Traza</span><ArrowRight size={17}/><span>SophIA API v2</span></section>
     </section>
@@ -94,7 +117,7 @@ export default function Home() {
   return <main>
     <header className="topbar">
       <button className="brand brand-button" onClick={()=>setView('explorer')}><Logo/><span>traza<b>.</b></span></button>
-      <nav><button className="active" onClick={()=>setView('explorer')}>Explorador</button><button onClick={()=>setView('docs')}>Documentación</button></nav>
+      <nav><button className="active" onClick={()=>setView('explorer')}>Explorador</button><button onClick={()=>setView('agents')}>Agentes</button><button onClick={()=>setView('docs')}>Documentación</button></nav>
       <div className="header-actions"><button className="icon-button" aria-label="Actividad"><Activity size={18}/></button><div className="avatar">RT</div><button className="user-menu">Rubén Toro <ChevronDown size={15}/></button></div>
     </header>
     <section className="search-shell" id="explorer">

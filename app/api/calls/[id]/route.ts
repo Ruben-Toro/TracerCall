@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getSophiaConnection } from '../../../lib/sophia-connection';
 
-const DEFAULT_API_URL = 'https://dashboard.soph-ia.ai/api/v2';
 const CALL_ID_PATTERN = /^[a-zA-Z0-9_-]{8,100}$/;
 type ErrorCode = 'INVALID_CALL_ID'|'NOT_CONFIGURED'|'UPSTREAM_AUTH'|'UPSTREAM_HTTP'|'NOT_FOUND'|'UPSTREAM_TIMEOUT'|'UPSTREAM_NETWORK'|'INVALID_RESPONSE';
 
@@ -20,10 +20,9 @@ export async function GET(_request:NextRequest,context:{params:Promise<{id:strin
   const requestId=crypto.randomUUID();
   const {id}=await context.params;
   if(!CALL_ID_PATTERN.test(id))return failure(400,'INVALID_CALL_ID','El ID de llamada no tiene un formato válido.',requestId);
-  const apiKey=process.env.SOPHIA_API_KEY;
+  const {apiKey,baseUrl}=getSophiaConnection();
   if(!apiKey)return failure(503,'NOT_CONFIGURED','La conexión con SophIA no está configurada.',requestId);
   try{
-    const baseUrl=(process.env.SOPHIA_API_URL||DEFAULT_API_URL).replace(/\/$/,'');
     const url=new URL(`${baseUrl}/callLogs`);url.searchParams.set('id',id);
     const response=await fetch(url,{headers:{'x-api-key':apiKey,accept:'application/json'},cache:'no-store',signal:AbortSignal.timeout(15_000)});
     if(response.status===401||response.status===403)return failure(502,'UPSTREAM_AUTH','SophIA rechazó la API key configurada.',requestId);
