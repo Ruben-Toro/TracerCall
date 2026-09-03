@@ -1,7 +1,8 @@
 'use client';
 
-import { Activity, AlertTriangle, ArrowRight, BookOpen, Check, ChevronDown, Clock3, Copy, DollarSign, Download, Headphones, KeyRound, Phone, Search, ShieldCheck, Sparkles, UserRound, X } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowRight, BookOpen, Check, ChevronDown, Clock3, Copy, DollarSign, Download, Globe2, Headphones, KeyRound, Phone, Search, ShieldCheck, Sparkles, UserRound, X } from 'lucide-react';
 import { FormEvent, useMemo, useState } from 'react';
+import { parsePhoneNumberFromString } from 'libphonenumber-js';
 
 type TraceEvent = { time: string; title: string; detail: string; kind: 'ok' | 'info' | 'warn'; tag: string; duration?: string };
 type CallRecord = Record<string, unknown>;
@@ -14,6 +15,13 @@ function formatDate(value:unknown){
   const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).formatToParts(date);
   const get=(type:string)=>parts.find(part=>part.type===type)?.value||'';
   return `${get('year')}-${get('day')}-${get('month')} ${get('hour')}:${get('minute')}:${get('second')}`;
+}
+function countryFromPhone(value:unknown){
+  if(typeof value!=='string'||!value.trim())return null;
+  const phone=parsePhoneNumberFromString(value.trim());if(!phone?.country)return null;
+  const name=new Intl.DisplayNames(['es'],{type:'region'}).of(phone.country)||phone.country;
+  const flag=phone.country.replace(/./g,char=>String.fromCodePoint(127397+char.charCodeAt(0)));
+  return {name,flag,code:`+${phone.countryCallingCode}`};
 }
 function asArray(value:unknown):CallRecord[]{
   if(typeof value==='string'){try{return asArray(JSON.parse(value))}catch{return []}}
@@ -57,6 +65,7 @@ export default function Home() {
   const crm=object(call.crm);const crmLead=object(crm.lead);const crmContact=object(crm.contact);const crmAccount=object(crm.account);
   const statusUpdates=object(call.statusUpdates);
   const durationSeconds=Number(statusUpdates.callDuration||0)||(Number(call.duration)>300?Number(call.duration)/1000:Number(call.duration)||0);
+  const destinationCountry=countryFromPhone(call.to);
   const filtered=useMemo(()=>traceEvents.filter(e=>`${e.title} ${e.detail} ${e.tag}`.toLowerCase().includes(query.toLowerCase())&&(!onlyWarnings||e.kind==='warn')),[traceEvents,query,onlyWarnings]);
   function notify(message:string){setToast(message);window.setTimeout(()=>setToast(''),1800)}
   function exportReport(){
@@ -101,6 +110,7 @@ export default function Home() {
         <article><span className="metric-icon blue"><Headphones size={17}/></span><div><label>AGENTE</label><strong>{text(pick(call,'assistant_name','agent_name','assistantId','assistant_id'))||'—'}</strong></div></article>
         <article><span className="metric-icon violet"><Sparkles size={17}/></span><div><label>EVENTOS</label><strong>{traceEvents.length}</strong></div></article>
         <article><span className="metric-icon gold"><DollarSign size={17}/></span><div><label>COSTO</label><strong>{call.cost!==undefined?`$${Number(call.cost).toFixed(4)}`:'—'}</strong></div></article>
+        <article><span className="metric-icon teal"><Globe2 size={17}/></span><div><label>PAÍS DESTINO</label><strong>{destinationCountry?`${destinationCountry.flag} ${destinationCountry.name}`:'No identificado'}</strong>{destinationCountry&&<small>{destinationCountry.code}</small>}</div></article>
       </div>
       <div className="content-grid">
         <section className="timeline-card"><div className="card-header"><div><h3>Línea de tiempo</h3><p>{filtered.length} eventos visibles de {traceEvents.length}</p></div><div className="filters"><div className="mini-search"><Search size={15}/><input aria-label="Buscar eventos" placeholder="Buscar evento…" value={query} onChange={e=>setQuery(e.target.value)}/></div><button className={onlyWarnings?'filter-active':''} onClick={()=>setOnlyWarnings(!onlyWarnings)}><AlertTriangle size={15}/> Alertas</button></div></div>
